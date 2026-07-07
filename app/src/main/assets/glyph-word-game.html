@@ -5,20 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>GLYPH. — a quiet word puzzle</title>
 <meta name="description" content="A self-contained word puzzle game with a 100,000+ word dictionary, 370+ hand-built crossword levels across 25 worlds, an endless procedural mode, and a daily challenge. Works fully offline.">
-<meta name="theme-color" content="#060606">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="GLYPH.">
 <meta name="mobile-web-app-capable" content="yes">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='black'/%3E%3Ccircle cx='50' cy='50' r='16' fill='%23ff1e1e'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='black'/%3E%3Ccircle cx='50' cy='50' r='16' fill='%23ff1e1e'/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="glyph-icon-adapt.png" sizes="512x512">
+<link rel="apple-touch-icon" href="glyph-icon-adapt.png">
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js');}</script>
 <style>
 /* ============================================================
    GLYPH — design tokens
    Nothing-inspired: transparent hairline structure, dot-matrix
    numerals, monochrome base, single red accent used sparingly.
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@font-face{
+  font-family:'DotGothic16';
+  src:url('DotGothic16.ttf') format('truetype'),
+       url('https://fonts.gstatic.com/s/dotgothic16/v21/v6-QGYjBJFKgyw5nSoDAGE7L.ttf') format('truetype');
+  font-weight:400;
+  font-style:normal;
+}
 
 :root{
   --bg: #ffffff;
