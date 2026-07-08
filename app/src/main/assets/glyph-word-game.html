@@ -418,11 +418,21 @@ button, input { font-family: inherit; }
 
 .empty-state{ text-align:center; padding:60px 30px; color:var(--ink-dim); font-family:'DotGothic16',monospace; font-size:13px; }
 
-/* Thin hairline scrollbar (Nothing-style) */
-::-webkit-scrollbar{ width: 4px; height: 4px; }
-::-webkit-scrollbar-track{ background: transparent; }
-::-webkit-scrollbar-thumb{ background: var(--line-strong); }
-::-webkit-scrollbar-thumb:window-inactive{ background: var(--line); }
+/* Dot-matrix scroll indicator */
+.scroll-dots{
+  position:fixed; right:6px; top:50%; transform:translateY(-50%); z-index:50;
+  display:flex; flex-direction:column; gap:5px; pointer-events:none; opacity:0;
+  transition:opacity .3s ease;
+}
+.scroll-dots.show{ opacity:1; }
+.scroll-dot{
+  width:3px; height:3px; border-radius:50%;
+  background:var(--ink-faint); transition:background .2s, transform .2s;
+}
+.scroll-dot.on{ background:var(--ink); transform:scale(1.6); }
+
+/* Hide native scrollbar */
+::-webkit-scrollbar{ width:0; height:0; }
 
 @media (min-width: 560px){
   #app{ max-width:480px; margin:0 auto; border-left:1px solid var(--line); border-right:1px solid var(--line); }
@@ -669,6 +679,9 @@ button, input { font-family: inherit; }
     <button class="tab" data-tab="stats">Stats</button>
     <button class="tab" data-tab="settings">Settings</button>
   </nav>
+
+  <!-- ============ SCROLL INDICATOR ============ -->
+  <div class="scroll-dots" id="scroll-dots"></div>
 
 </div>
 
@@ -1700,10 +1713,43 @@ function wireEvents(){
   }
 }
 
+/* ================= Scroll indicator ================= */
+function setupScrollDots(){
+  const container = qs('#scroll-dots');
+  const DOT_COUNT = 7;
+  container.innerHTML = '';
+  for (let i=0;i<DOT_COUNT;i++){
+    const dot = document.createElement('div');
+    dot.className = 'scroll-dot';
+    container.appendChild(dot);
+  }
+  const dots = qsa('.scroll-dot', container);
+  const scrollEls = qsa('.scroll');
+  function update(){
+    let maxScroll = 0, curScroll = 0;
+    scrollEls.forEach(el => {
+      if (el.scrollHeight > el.clientHeight){
+        maxScroll = Math.max(maxScroll, el.scrollHeight - el.clientHeight);
+        if (el.closest('.screen.active') || el.closest('#screen-home')) curScroll = Math.max(curScroll, el.scrollTop);
+      }
+    });
+    if (maxScroll <= 0){ container.classList.remove('show'); return; }
+    container.classList.add('show');
+    const pct = curScroll / maxScroll;
+    const activeIdx = Math.round(pct * (DOT_COUNT - 1));
+    dots.forEach((d,i) => d.classList.toggle('on', i <= activeIdx));
+  }
+  scrollEls.forEach(el => el.addEventListener('scroll', update));
+  const obs = new MutationObserver(update);
+  qsa('.screen').forEach(s => obs.observe(s, {attributes:true, attributeFilter:['class']}));
+  update();
+}
+
 /* ================= Init ================= */
 function init(){
   state = loadSave();
   applyTheme();
+  setupScrollDots();
   wireEvents();
   setupWheelInput();
   renderHome();
