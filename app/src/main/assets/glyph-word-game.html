@@ -644,11 +644,11 @@ body{ -ms-overflow-style:none; scrollbar-width:none; }
         <button class="toggle" id="toggle-haptics"><div class="knob"></div></button>
       </div>
       <div class="settings-row" id="row-export" style="cursor:pointer;">
-        <div><div class="t">Export save</div><div class="d">Copy progress as text code</div></div>
+        <div><div class="t">Export save</div><div class="d">Copy progress to clipboard</div></div>
         <span>›</span>
       </div>
       <div class="settings-row" id="row-import" style="cursor:pointer;">
-        <div><div class="t" style="color:var(--red);">Import save</div><div class="d">Restore from a text code</div></div>
+        <div><div class="t" style="color:var(--red);">Import save</div><div class="d">Paste progress from clipboard</div></div>
         <span>›</span>
       </div>
       <div class="settings-row" id="row-reset" style="cursor:pointer;">
@@ -740,8 +740,8 @@ body{ -ms-overflow-style:none; scrollbar-width:none; }
   <div class="modal-overlay" id="modal-import">
     <div class="modal">
       <h2 style="font-size:22px;">Import save</h2>
-      <div class="sub">Open your glyph-save.txt in a text editor, copy the contents, and paste them below</div>
-      <textarea class="challenge-input" id="import-text" rows="4" style="resize:none;text-align:left;font-size:11px;margin:12px 0;" placeholder="Paste save text here..."></textarea>
+      <div class="sub">Copy the exported data and paste it below</div>
+      <textarea class="challenge-input" id="import-text" rows="4" style="resize:none;text-align:left;font-size:11px;margin:12px 0;" placeholder="Paste save data here..."></textarea>
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
         <button class="btn btn-red" id="import-confirm">Import</button>
       </div>
@@ -1789,20 +1789,8 @@ function renderCalendar(){
 /* ================= Save export / import ================= */
 function exportSave(){
   try{
-    const txt = JSON.stringify(state);
-    const blob = new Blob([txt], {type:'text/plain'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'glyph-save.txt';
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    toast('Save exported!');
-  }catch(e){
-    try{
-      navigator.clipboard.writeText(JSON.stringify(state)).then(() => toast('Copied!')).catch(() => { prompt('Copy this text into a .txt file:', JSON.stringify(state)); });
-    }catch(e2){ prompt('Copy this text into a .txt file:', JSON.stringify(state)); }
-  }
+    navigator.clipboard.writeText(JSON.stringify(state)).then(() => toast('Copied to clipboard!')).catch(() => { prompt('Copy this:', JSON.stringify(state)); });
+  }catch(e){ prompt('Copy this:', JSON.stringify(state)); }
 }
 function importSave(code){
   try{
@@ -1889,14 +1877,13 @@ function wireEvents(){
     qs('#modal-reset').classList.remove('show');
     showScreen('home',{noStack:true}); renderHome(); applyTheme();
   });
-  qs('#toggle-glyph').addEventListener('click', () => {
-    state.settings.glyphSounds = !state.settings.glyphSounds; persist(); renderSettings();
-  });
   qs('#row-export').addEventListener('click', exportSave);
   qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-text').value = ''; });
   qs('#import-cancel').addEventListener('click', () => qs('#modal-import').classList.remove('show'));
   qs('#import-confirm').addEventListener('click', () => importSave(qs('#import-text').value));
-
+  qs('#toggle-glyph').addEventListener('click', () => {
+    state.settings.glyphSounds = !state.settings.glyphSounds; persist(); renderSettings();
+  });
   window.addEventListener('resize', () => { if (currentScreen==='game' && game) renderBoard(); });
   if (window.matchMedia){
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (state.settings.theme==='system') applyTheme(); });
