@@ -583,6 +583,22 @@ button, input { font-family: inherit; }
     </div>
   </div>
 
+  <!-- ============ ENDLESS DIFFICULTY MODAL ============ -->
+  <div class="modal-overlay" id="modal-endless">
+    <div class="modal">
+      <h2>Endless</h2>
+      <div class="sub">Choose difficulty</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-primary" data-diff="easy">Easy<span class="chev">→</span></button>
+        <button class="btn" data-diff="medium">Medium<span class="chev">→</span></button>
+        <button class="btn" data-diff="hard">Hard<span class="chev">→</span></button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="endless-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ GLOBAL TAB BAR ============ -->
   <nav class="tabbar" id="global-tabbar">
     <button class="tab active" data-tab="home">Home</button>
@@ -679,6 +695,7 @@ function defaultSave(){
     lastPlayedLevelId: null,
     endlessOrder: null,
     endlessCursor: 0,
+    endlessDifficulty: 'medium',
     seenSwipeTip: false,
   };
 }
@@ -908,30 +925,38 @@ function buildCrossword(anchor, subwords, maxWords){
   return {placed, bonus, rows, cols};
 }
 
-const ENDLESS_ANCHOR_CANDIDATES = Array.from(DICT_SET).filter(w => w.length>=6 && w.length<=8);
+const DIFFICULTY = {
+  easy: { minAnchor:5, maxAnchor:6, minSubs:5, capMultiplier:6 },
+  medium: { minAnchor:6, maxAnchor:7, minSubs:7, capMultiplier:10 },
+  hard: { minAnchor:7, maxAnchor:8, minSubs:9, capMultiplier:14 }
+};
 
-function generateProceduralLevel(seedWord){
+function generateProceduralLevel(seedWord, difficulty){
+  difficulty = difficulty || 'medium';
+  const d = DIFFICULTY[difficulty];
+  const pool = Array.from(DICT_SET).filter(w => w.length >= d.minAnchor && w.length <= d.maxAnchor && w.length <= 8);
   let anchor = seedWord;
   if (!anchor){
-    anchor = ENDLESS_ANCHOR_CANDIDATES[Math.floor(Math.random()*ENDLESS_ANCHOR_CANDIDATES.length)];
+    anchor = pool[Math.floor(Math.random() * pool.length)];
   }
   const subs = subwordsFor(anchor);
-  if (subs.length < 6) return null;
-  const cap = anchor.length <= 6 ? 8 : (anchor.length <= 7 ? 10 : 12);
+  if (subs.length < d.minSubs) return null;
+  const cap = d.capMultiplier;
   const cw = buildCrossword(anchor, subs, cap);
   if (cw.placed.length < 4) return null;
   return { id: 'proc_'+anchor+'_'+Date.now(), world:'Endless', anchor, letters: anchor.split(''),
            placed: cw.placed, bonus: cw.bonus, rows: cw.rows, cols: cw.cols };
 }
 
-function nextEndlessLevel(){
+function nextEndlessLevel(difficulty){
+  difficulty = difficulty || 'medium';
   if (!state.endlessOrder || state.endlessCursor >= state.endlessOrder.length){
     const idxs = ENDLESS_POOL.map((_,i)=>i);
     for (let i=idxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [idxs[i],idxs[j]]=[idxs[j],idxs[i]]; }
     state.endlessOrder = idxs; state.endlessCursor = 0; persist();
   }
   if (Math.random() < 0.35){
-    const proc = generateProceduralLevel();
+    const proc = generateProceduralLevel(null, difficulty);
     if (proc) return proc;
   }
   const lv = ENDLESS_POOL[state.endlessOrder[state.endlessCursor]];
@@ -1243,7 +1268,7 @@ function goToNextAfterModal(){
     if (nextWorld && isWorldUnlocked(nextWorld.index)){ startLevel(nextWorld.levels[0], {mode:'campaign'}); return; }
     showScreen('worlds', {noStack:true}); renderWorlds();
   } else if (game.mode === 'endless'){
-    startLevel(nextEndlessLevel(), {mode:'endless'});
+    startLevel(nextEndlessLevel(state.endlessDifficulty || 'medium'), {mode:'endless'});
   } else {
     showScreen('home', {noStack:true}); renderHome();
   }
@@ -1428,7 +1453,15 @@ function wireEvents(){
   }));
   qs('#btn-continue').addEventListener('click', () => startLevel(findContinueLevel(), {mode:'campaign'}));
   qs('#btn-worlds').addEventListener('click', () => { showScreen('worlds',{noStack:true}); renderWorlds(); });
-  qs('#btn-endless').addEventListener('click', () => startLevel(nextEndlessLevel(), {mode:'endless'}));
+  qs('#btn-endless').addEventListener('click', () => qs('#modal-endless').classList.add('show'));
+  qs('#endless-cancel').addEventListener('click', () => qs('#modal-endless').classList.remove('show'));
+  qsa('#modal-endless [data-diff]').forEach(b => b.addEventListener('click', () => {
+    qs('#modal-endless').classList.remove('show');
+    const diff = b.dataset.diff;
+    state.endlessDifficulty = diff;
+    persist();
+    startLevel(nextEndlessLevel(diff), {mode:'endless', difficulty: diff});
+  }));
   qs('#btn-daily').addEventListener('click', () => startLevel(dailyLevelForToday(), {mode:'daily'}));
 
   qs('#game-back').addEventListener('click', () => { showScreen('home',{noStack:true}); renderHome(); });
