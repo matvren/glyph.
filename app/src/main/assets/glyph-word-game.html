@@ -435,16 +435,16 @@ button, input { font-family: inherit; }
 
 /* Dot-matrix scroll indicator */
 .scroll-dots{
-  position:fixed; right:6px; top:50%; transform:translateY(-50%); z-index:50;
-  display:flex; flex-direction:column; gap:5px; pointer-events:none; opacity:0;
-  transition:opacity .3s ease;
+  position:fixed; right:2px; top:50%; transform:translateY(-50%); z-index:50;
+  display:flex; flex-direction:column; gap:4px; pointer-events:none; opacity:0;
+  transition:opacity .25s ease; padding:8px 4px;
 }
 .scroll-dots.show{ opacity:1; }
 .scroll-dot{
-  width:3px; height:3px; border-radius:50%;
+  width:4px; height:4px; border-radius:50%;
   background:var(--ink-faint); transition:background .2s, transform .2s;
 }
-.scroll-dot.on{ background:var(--ink); transform:scale(1.6); }
+.scroll-dot.on{ background:var(--red); transform:scale(1.4); }
 
 /* Splash / loading screen */
 .splash{
@@ -741,11 +741,16 @@ body{ -ms-overflow-style:none; scrollbar-width:none; }
     <div class="modal">
       <h2 style="font-size:22px;">Import save</h2>
       <div class="sub">Select a .flow file to restore progress</div>
-      <input type="file" accept=".flow" id="import-file" style="display:none;">
-      <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0 16px;">
+      <input type="file" accept=".flow,.json" id="import-file" style="display:none;">
+      <div style="display:flex;flex-direction:column;gap:8px;margin:6px 0;">
         <button class="btn btn-primary" id="import-choose">Choose .flow file</button>
-        <div class="sub" id="import-filename" style="margin:0;color:var(--ink-faint);"></div>
+        <div class="sub" id="import-filename" style="margin:0;color:var(--ink-faint);font-size:10px;"></div>
       </div>
+      <details style="border-top:1px solid var(--line);padding-top:12px;margin-top:4px;">
+        <summary style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);cursor:pointer;font-family:'DotGothic16',monospace;">Or paste code</summary>
+        <textarea class="challenge-input" id="import-text" rows="3" style="resize:none;text-align:left;font-size:11px;margin-top:8px;" placeholder="Paste save code here..."></textarea>
+        <button class="btn btn-red" id="import-confirm" style="margin-top:8px;">Import</button>
+      </details>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="import-cancel">Cancel</button>
       </div>
@@ -1791,15 +1796,25 @@ function renderCalendar(){
 function exportSave(){
   try{
     const json = JSON.stringify(state);
-    const blob = new Blob([json], {type:'application/octet-stream'});
-    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'glyph-save.flow';
+    a.href = 'data:application/octet-stream,' + encodeURIComponent(json);
+    a.download = 'glyph-save.flow';
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
     toast('Save exported!');
   }catch(e){ toast('Export failed'); }
+}
+function importSave(code){
+  try{
+    const parsed = JSON.parse(code);
+    state = Object.assign(defaultSave(), parsed, {
+      settings: Object.assign(defaultSave().settings, parsed.settings||{})
+    });
+    persist();
+    qs('#modal-import').classList.remove('show');
+    showScreen('home',{noStack:true}); renderHome(); applyTheme();
+    toast('Save imported!');
+  }catch(e){ toast('Invalid code'); }
 }
 function importSaveFromFile(file){
   const reader = new FileReader();
@@ -1904,6 +1919,7 @@ function wireEvents(){
     qs('#import-filename').textContent = file.name;
     importSaveFromFile(file);
   });
+  qs('#import-confirm').addEventListener('click', () => importSave(qs('#import-text').value));
 
   window.addEventListener('resize', () => { if (currentScreen==='game' && game) renderBoard(); });
   if (window.matchMedia){
@@ -1914,7 +1930,7 @@ function wireEvents(){
 /* ================= Scroll indicator ================= */
 function setupScrollDots(){
   const container = qs('#scroll-dots');
-  const DOT_COUNT = 7;
+  const DOT_COUNT = 9;
   container.innerHTML = '';
   for (let i=0;i<DOT_COUNT;i++){
     const dot = document.createElement('div');
@@ -1924,16 +1940,16 @@ function setupScrollDots(){
   const dots = qsa('.scroll-dot', container);
   const scrollEls = qsa('.scroll');
   function update(){
-    let maxScroll = 0, curScroll = 0;
+    let activeEl = null, maxH = 0;
     scrollEls.forEach(el => {
-      if (el.scrollHeight > el.clientHeight){
-        maxScroll = Math.max(maxScroll, el.scrollHeight - el.clientHeight);
-        if (el.closest('.screen.active') || el.closest('#screen-home')) curScroll = Math.max(curScroll, el.scrollTop);
+      if (el.closest('.screen.active') && el.scrollHeight > el.clientHeight){
+        const h = el.scrollHeight - el.clientHeight;
+        if (h > maxH){ maxH = h; activeEl = el; }
       }
     });
-    if (maxScroll <= 0){ container.classList.remove('show'); return; }
+    if (!activeEl || maxH <= 0){ container.classList.remove('show'); return; }
     container.classList.add('show');
-    const pct = curScroll / maxScroll;
+    const pct = activeEl.scrollTop / maxH;
     const activeIdx = Math.round(pct * (DOT_COUNT - 1));
     dots.forEach((d,i) => d.classList.toggle('on', i <= activeIdx));
   }
