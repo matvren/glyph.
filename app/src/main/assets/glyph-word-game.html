@@ -472,7 +472,8 @@ button, input { font-family: inherit; }
 }
 
 /* Hide native scrollbar */
-::-webkit-scrollbar{ width:0; height:0; }
+::-webkit-scrollbar{ display:none; }
+body{ -ms-overflow-style:none; scrollbar-width:none; }
 
 @media (min-width: 560px){
   #app{ max-width:480px; margin:0 auto; border-left:1px solid var(--line); border-right:1px solid var(--line); }
@@ -739,10 +740,11 @@ button, input { font-family: inherit; }
   <div class="modal-overlay" id="modal-import">
     <div class="modal">
       <h2 style="font-size:22px;">Import save</h2>
-      <div class="sub">Paste your save code below to restore progress</div>
-      <textarea class="challenge-input" id="import-text" rows="3" style="resize:none;text-align:left;font-size:11px;" placeholder="Paste save code here..."></textarea>
+      <div class="sub">Select a .flow file to restore progress</div>
+      <input type="file" accept=".flow" id="import-file" style="display:none;">
       <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0 16px;">
-        <button class="btn btn-red" id="import-confirm">Import</button>
+        <button class="btn btn-primary" id="import-choose">Choose .flow file</button>
+        <div class="sub" id="import-filename" style="margin:0;color:var(--ink-faint);"></div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="import-cancel">Cancel</button>
@@ -1789,22 +1791,32 @@ function renderCalendar(){
 function exportSave(){
   try{
     const json = JSON.stringify(state);
-    const b64 = btoa(unescape(encodeURIComponent(json)));
-    navigator.clipboard.writeText(b64).then(() => toast('Save code copied!')).catch(() => { prompt('Copy this code:', b64); });
+    const blob = new Blob([json], {type:'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'glyph-save.flow';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Save exported!');
   }catch(e){ toast('Export failed'); }
 }
-function importSave(code){
-  try{
-    const json = decodeURIComponent(escape(atob(code.trim())));
-    const parsed = JSON.parse(json);
-    state = Object.assign(defaultSave(), parsed, {
-      settings: Object.assign(defaultSave().settings, parsed.settings||{})
-    });
-    persist();
-    qs('#modal-import').classList.remove('show');
-    showScreen('home',{noStack:true}); renderHome(); applyTheme();
-    toast('Save imported!');
-  }catch(e){ toast('Invalid code'); }
+function importSaveFromFile(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      state = Object.assign(defaultSave(), parsed, {
+        settings: Object.assign(defaultSave().settings, parsed.settings||{})
+      });
+      persist();
+      qs('#modal-import').classList.remove('show');
+      showScreen('home',{noStack:true}); renderHome(); applyTheme();
+      toast('Save imported!');
+    }catch(e){ toast('Invalid .flow file'); }
+  };
+  reader.onerror = () => toast('Could not read file');
+  reader.readAsText(file);
 }
 
 /* ================= Wiring ================= */
@@ -1883,9 +1895,15 @@ function wireEvents(){
     state.settings.glyphSounds = !state.settings.glyphSounds; persist(); renderSettings();
   });
   qs('#row-export').addEventListener('click', exportSave);
-  qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-text').value = ''; });
+  qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-filename').textContent = ''; });
   qs('#import-cancel').addEventListener('click', () => qs('#modal-import').classList.remove('show'));
-  qs('#import-confirm').addEventListener('click', () => importSave(qs('#import-text').value));
+  qs('#import-choose').addEventListener('click', () => qs('#import-file').click());
+  qs('#import-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    qs('#import-filename').textContent = file.name;
+    importSaveFromFile(file);
+  });
 
   window.addEventListener('resize', () => { if (currentScreen==='game' && game) renderBoard(); });
   if (window.matchMedia){
