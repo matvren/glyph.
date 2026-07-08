@@ -740,17 +740,11 @@ body{ -ms-overflow-style:none; scrollbar-width:none; }
   <div class="modal-overlay" id="modal-import">
     <div class="modal">
       <h2 style="font-size:22px;">Import save</h2>
-      <div class="sub">Select a .flow file to restore progress</div>
-      <input type="file" accept=".flow,.json" id="import-file" style="display:none;">
-      <div style="display:flex;flex-direction:column;gap:8px;margin:6px 0;">
-        <button class="btn btn-primary" id="import-choose">Choose .flow file</button>
-        <div class="sub" id="import-filename" style="margin:0;color:var(--ink-faint);font-size:10px;"></div>
+      <div class="sub">Open your glyph-save.txt in a text editor, copy the contents, and paste them below</div>
+      <textarea class="challenge-input" id="import-text" rows="4" style="resize:none;text-align:left;font-size:11px;margin:12px 0;" placeholder="Paste save text here..."></textarea>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-red" id="import-confirm">Import</button>
       </div>
-      <details style="border-top:1px solid var(--line);padding-top:12px;margin-top:4px;">
-        <summary style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);cursor:pointer;font-family:'DotGothic16',monospace;">Or paste code</summary>
-        <textarea class="challenge-input" id="import-text" rows="3" style="resize:none;text-align:left;font-size:11px;margin-top:8px;" placeholder="Paste save code here..."></textarea>
-        <button class="btn btn-red" id="import-confirm" style="margin-top:8px;">Import</button>
-      </details>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="import-cancel">Cancel</button>
       </div>
@@ -1795,14 +1789,20 @@ function renderCalendar(){
 /* ================= Save export / import ================= */
 function exportSave(){
   try{
-    const json = JSON.stringify(state);
+    const txt = JSON.stringify(state);
+    const blob = new Blob([txt], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = 'data:application/octet-stream,' + encodeURIComponent(json);
-    a.download = 'glyph-save.flow';
+    a.href = url; a.download = 'glyph-save.txt';
     document.body.appendChild(a); a.click();
     document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
     toast('Save exported!');
-  }catch(e){ toast('Export failed'); }
+  }catch(e){
+    try{
+      navigator.clipboard.writeText(JSON.stringify(state)).then(() => toast('Copied!')).catch(() => { prompt('Copy this text into a .txt file:', JSON.stringify(state)); });
+    }catch(e2){ prompt('Copy this text into a .txt file:', JSON.stringify(state)); }
+  }
 }
 function importSave(code){
   try{
@@ -1815,23 +1815,6 @@ function importSave(code){
     showScreen('home',{noStack:true}); renderHome(); applyTheme();
     toast('Save imported!');
   }catch(e){ toast('Invalid code'); }
-}
-function importSaveFromFile(file){
-  const reader = new FileReader();
-  reader.onload = () => {
-    try{
-      const parsed = JSON.parse(reader.result);
-      state = Object.assign(defaultSave(), parsed, {
-        settings: Object.assign(defaultSave().settings, parsed.settings||{})
-      });
-      persist();
-      qs('#modal-import').classList.remove('show');
-      showScreen('home',{noStack:true}); renderHome(); applyTheme();
-      toast('Save imported!');
-    }catch(e){ toast('Invalid .flow file'); }
-  };
-  reader.onerror = () => toast('Could not read file');
-  reader.readAsText(file);
 }
 
 /* ================= Wiring ================= */
@@ -1910,15 +1893,8 @@ function wireEvents(){
     state.settings.glyphSounds = !state.settings.glyphSounds; persist(); renderSettings();
   });
   qs('#row-export').addEventListener('click', exportSave);
-  qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-filename').textContent = ''; });
+  qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-text').value = ''; });
   qs('#import-cancel').addEventListener('click', () => qs('#modal-import').classList.remove('show'));
-  qs('#import-choose').addEventListener('click', () => qs('#import-file').click());
-  qs('#import-file').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    qs('#import-filename').textContent = file.name;
-    importSaveFromFile(file);
-  });
   qs('#import-confirm').addEventListener('click', () => importSave(qs('#import-text').value));
 
   window.addEventListener('resize', () => { if (currentScreen==='game' && game) renderBoard(); });
