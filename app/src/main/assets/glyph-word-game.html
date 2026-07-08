@@ -950,14 +950,12 @@ function generateProceduralLevel(seedWord, difficulty){
 
 function nextEndlessLevel(difficulty){
   difficulty = difficulty || 'medium';
+  const proc = generateProceduralLevel(null, difficulty);
+  if (proc) return proc;
   if (!state.endlessOrder || state.endlessCursor >= state.endlessOrder.length){
     const idxs = ENDLESS_POOL.map((_,i)=>i);
     for (let i=idxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [idxs[i],idxs[j]]=[idxs[j],idxs[i]]; }
     state.endlessOrder = idxs; state.endlessCursor = 0; persist();
-  }
-  if (Math.random() < 0.35){
-    const proc = generateProceduralLevel(null, difficulty);
-    if (proc) return proc;
   }
   const lv = ENDLESS_POOL[state.endlessOrder[state.endlessCursor]];
   state.endlessCursor++; persist();
