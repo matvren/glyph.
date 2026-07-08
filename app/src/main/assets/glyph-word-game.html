@@ -360,11 +360,7 @@ button, input { font-family: inherit; }
 .cal-day.done::after{ content:''; position:absolute; bottom:2px; left:50%; margin-left:-1.5px; width:3px; height:3px; border-radius:50%; background:var(--red); }
 .cal-day.other{ opacity:.25; }
 
-/* ---------- Words found list (in-game) ---------- */
-.found-words{ display:flex; flex-wrap:wrap; gap:4px; padding:8px 18px; border-top:1px solid var(--line); }
-.found-words span{ font-family:'DotGothic16',monospace; font-size:10px; border:1px solid var(--line); padding:2px 6px; cursor:pointer; color:var(--ink-dim); transition:border-color .15s,color .15s; }
-.found-words span:hover{ border-color:var(--red); color:var(--red); }
-.found-words span.required{ border-color:var(--line-strong); color:var(--ink); }
+
 
 /* ---------- Modal ---------- */
 .modal-overlay{
@@ -570,7 +566,6 @@ button, input { font-family: inherit; }
       <summary>Extra words found (<span id="extra-count">0</span>)</summary>
       <div class="extra-words" id="extra-words"></div>
     </details>
-    <div class="found-words" id="found-words"></div>
     <div class="wheel-area">
       <div class="round-btn-wrap">
         <button class="round-btn" id="btn-shuffle" aria-label="Shuffle letters">
@@ -1171,7 +1166,6 @@ function startLevel(levelData, opts){
   persist();
   showScreen('game');
   loadLevel(levelData, opts);
-  updateWordsFound();
 }
 
 function loadLevel(lv, opts){
@@ -1250,6 +1244,17 @@ function renderBoard(){
     div.dataset.key = k;
     board.appendChild(div);
   });
+  board.onclick = (e) => {
+    const cell = e.target.closest('.cell.filled');
+    if (!cell) return;
+    const key = cell.dataset.key;
+    if (!game.cellMap || !game.cellMap.has(key)) return;
+    const words = game.cellMap.get(key).words;
+    for (const wi of words){
+      const word = game.lv.placed[wi].word;
+      if (game.solvedWords.has(word)){ fetchDefinition(word); return; }
+    }
+  };
   paintSolvedCells(false);
 }
 
@@ -1386,7 +1391,6 @@ function finalizeSelection(){
     soundFound(); vibrate(12);
     saveLevelProgress();
     checkLevelComplete();
-    updateWordsFound();
   } else if (game.bonusSet.has(word) && !game.foundBonus.has(word)){
     game.foundBonus.add(word);
     game.sessionWordsFound++;
@@ -1395,7 +1399,6 @@ function finalizeSelection(){
     checkAchievements();
     state.coins += 1; game.sessionCoins += 1;
     updateExtraWords();
-    updateWordsFound();
     toast(word+' · bonus +1', 'bonus');
     soundBonus(); vibrate(8);
     saveLevelProgress();
@@ -1752,23 +1755,6 @@ function showDef(word, text){
   qs('#def-word').textContent = word.toLowerCase();
   qs('#def-text').textContent = text;
   qs('#modal-def').classList.add('show');
-}
-
-/* ================= Word list in-game (definitions) ================= */
-function updateWordsFound(){
-  const wrap = qs('#found-words');
-  if (!wrap) return;
-  const required = Array.from(game.solvedWords).sort();
-  const bonus = Array.from(game.foundBonus).sort();
-  const all = new Set([...required, ...bonus]);
-  wrap.innerHTML = '';
-  Array.from(all).sort().forEach(w => {
-    const span = document.createElement('span');
-    span.textContent = w;
-    if (required.includes(w)) span.classList.add('required');
-    span.addEventListener('click', () => fetchDefinition(w));
-    wrap.appendChild(span);
-  });
 }
 
 /* ================= Calendar ================= */
