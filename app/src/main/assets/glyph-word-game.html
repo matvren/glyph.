@@ -347,6 +347,25 @@ button, input { font-family: inherit; }
 }
 .challenge-input:focus{ border-color:var(--red); }
 
+/* ---------- Daily streak calendar ---------- */
+.cal-wrap{ padding:0 18px 18px; }
+.cal-month{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.cal-month button{ background:none; border:none; color:var(--ink-dim); font-family:'DotGothic16',monospace; font-size:14px; cursor:pointer; padding:4px 8px; }
+.cal-month button:hover{ color:var(--ink); }
+.cal-month span{ font-family:'DotGothic16',monospace; font-size:13px; letter-spacing:.1em; }
+.cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; text-align:center; }
+.cal-hd{ font-size:8px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); padding:4px 0; font-family:'DotGothic16',monospace; }
+.cal-day{ padding:5px 0; font-size:11px; font-family:'DotGothic16',monospace; color:var(--ink-faint); border-radius:0; position:relative; }
+.cal-day.today{ color:var(--ink); }
+.cal-day.done::after{ content:''; position:absolute; bottom:2px; left:50%; margin-left:-1.5px; width:3px; height:3px; border-radius:50%; background:var(--red); }
+.cal-day.other{ opacity:.25; }
+
+/* ---------- Words found list (in-game) ---------- */
+.found-words{ display:flex; flex-wrap:wrap; gap:4px; padding:8px 18px; border-top:1px solid var(--line); }
+.found-words span{ font-family:'DotGothic16',monospace; font-size:10px; border:1px solid var(--line); padding:2px 6px; cursor:pointer; color:var(--ink-dim); transition:border-color .15s,color .15s; }
+.found-words span:hover{ border-color:var(--red); color:var(--red); }
+.found-words span.required{ border-color:var(--line-strong); color:var(--ink); }
+
 /* ---------- Modal ---------- */
 .modal-overlay{
   position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:100;
@@ -517,6 +536,7 @@ button, input { font-family: inherit; }
       <summary>Extra words found (<span id="extra-count">0</span>)</summary>
       <div class="extra-words" id="extra-words"></div>
     </details>
+    <div class="found-words" id="found-words"></div>
     <div class="wheel-area">
       <div class="round-btn-wrap">
         <button class="round-btn" id="btn-shuffle" aria-label="Shuffle letters">
@@ -556,7 +576,9 @@ button, input { font-family: inherit; }
       <div class="settings-row"><div><div class="t">Longest word found</div></div><div class="t" id="s-longest">—</div></div>
       <div class="settings-row"><div><div class="t">Worlds completed</div></div><div class="t" id="s-worlds">0 / 25</div></div>
       <div class="settings-row"><div><div class="t">Daily best streak</div></div><div class="t" id="s-daily-best">0</div></div>
-      <div class="credit-block" style="margin-top:16px;"><p><b>Achievements</b></p></div>
+      <div class="credit-block" style="margin-top:8px;"><p><b>Daily calendar</b></p></div>
+      <div class="cal-wrap" id="cal-wrap"></div>
+      <div class="credit-block" style="margin-top:8px;"><p><b>Achievements</b></p></div>
       <div class="ach-grid" id="ach-grid"></div>
     </div>
   </section>
@@ -584,8 +606,20 @@ button, input { font-family: inherit; }
         <button class="toggle" id="toggle-sound"><div class="knob"></div></button>
       </div>
       <div class="settings-row">
+        <div><div class="t">Glyph sounds</div><div class="d">Nothing-style melodic tones</div></div>
+        <button class="toggle" id="toggle-glyph"><div class="knob"></div></button>
+      </div>
+      <div class="settings-row">
         <div><div class="t">Haptics</div><div class="d">Vibrate on word found (if supported)</div></div>
         <button class="toggle" id="toggle-haptics"><div class="knob"></div></button>
+      </div>
+      <div class="settings-row" id="row-export" style="cursor:pointer;">
+        <div><div class="t">Export save</div><div class="d">Copy progress as text code</div></div>
+        <span>›</span>
+      </div>
+      <div class="settings-row" id="row-import" style="cursor:pointer;">
+        <div><div class="t" style="color:var(--red);">Import save</div><div class="d">Restore from a text code</div></div>
+        <span>›</span>
       </div>
       <div class="settings-row" id="row-reset" style="cursor:pointer;">
         <div><div class="t" style="color:var(--red);">Reset progress</div><div class="d">Clears all levels, coins and stats</div></div>
@@ -672,6 +706,21 @@ button, input { font-family: inherit; }
     </div>
   </div>
 
+  <!-- ============ IMPORT MODAL ============ -->
+  <div class="modal-overlay" id="modal-import">
+    <div class="modal">
+      <h2 style="font-size:22px;">Import save</h2>
+      <div class="sub">Paste your save code below to restore progress</div>
+      <textarea class="challenge-input" id="import-text" rows="3" style="resize:none;text-align:left;font-size:11px;" placeholder="Paste save code here..."></textarea>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0 16px;">
+        <button class="btn btn-red" id="import-confirm">Import</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="import-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ GLOBAL TAB BAR ============ -->
   <nav class="tabbar" id="global-tabbar">
     <button class="tab active" data-tab="home">Home</button>
@@ -706,7 +755,7 @@ function vibrate(ms){
 }
 
 let audioCtx = null;
-function playTone(freq, dur, type){
+function playNote(freq, dur, type, startTime){
   if (!state.settings.sound) return;
   try{
     if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
@@ -714,17 +763,45 @@ function playTone(freq, dur, type){
     const gain = audioCtx.createGain();
     osc.type = type || 'sine';
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    const t = startTime || audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(); osc.stop(audioCtx.currentTime + dur + 0.02);
+    osc.start(t); osc.stop(t + dur + 0.02);
   }catch(e){}
 }
-function soundFound(){ playTone(660, 0.12, 'sine'); }
-function soundBonus(){ playTone(880, 0.1, 'triangle'); setTimeout(()=>playTone(1180,0.12,'triangle'), 70); }
-function soundComplete(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,0.16,'sine'), i*90)); }
-function soundInvalid(){ playTone(160, 0.09, 'sawtooth'); }
+
+function soundFound(){
+  if (state.settings.glyphSounds){
+    playNote(784, 0.08, 'sine'); playNote(988, 0.1, 'sine', audioCtx.currentTime+0.06);
+  } else {
+    playNote(660, 0.12, 'sine');
+  }
+}
+function soundBonus(){
+  if (state.settings.glyphSounds){
+    playNote(659, 0.07, 'triangle'); playNote(784, 0.07, 'triangle', audioCtx.currentTime+0.05);
+    playNote(988, 0.1, 'triangle', audioCtx.currentTime+0.1);
+  } else {
+    playNote(880, 0.1, 'triangle');
+    setTimeout(() => playNote(1180, 0.12, 'triangle'), 70);
+  }
+}
+function soundComplete(){
+  if (state.settings.glyphSounds){
+    [523,659,784,1047,1319].forEach((f,i) => playNote(f,0.2,'sine', audioCtx.currentTime+i*120e-3));
+  } else {
+    [523,659,784,1047].forEach((f,i) => setTimeout(() => playNote(f,0.16,'sine'), i*90));
+  }
+}
+function soundInvalid(){
+  if (state.settings.glyphSounds){
+    playNote(300, 0.06, 'sawtooth'); playNote(200, 0.08, 'sawtooth', audioCtx.currentTime+0.05);
+  } else {
+    playNote(160, 0.09, 'sawtooth');
+  }
+}
 
 function todayStr(d){
   d = d || new Date();
@@ -757,7 +834,7 @@ const TOTAL_DICT_WORDS = DICT_SET.size;
 const SAVE_KEY = 'glyph_save_v1';
 function defaultSave(){
   return {
-    settings: { theme: 'system', sound: true, haptics: true },
+    settings: { theme: 'system', sound: true, glyphSounds: true, haptics: true },
     coins: 0,
     levelProgress: {}, // id -> {complete, stars, solvedWords:[], foundBonus:[]}
     totalWordsFound: 0,
@@ -780,6 +857,7 @@ function defaultSave(){
     totalShuffles: 0,
     totalChallenges: 0,
     totalDailyCompleted: 0,
+    dailyCompletedDates: [],
   };
 }
 let state = null;
@@ -1059,7 +1137,7 @@ function startLevel(levelData, opts){
   persist();
   showScreen('game');
   loadLevel(levelData, opts);
-}
+  updateWordsFound();
 
 function loadLevel(lv, opts){
   const saved = (typeof lv.id !== 'undefined') ? state.levelProgress[lv.id] : null;
@@ -1273,6 +1351,7 @@ function finalizeSelection(){
     soundFound(); vibrate(12);
     saveLevelProgress();
     checkLevelComplete();
+    updateWordsFound();
   } else if (game.bonusSet.has(word) && !game.foundBonus.has(word)){
     game.foundBonus.add(word);
     game.sessionWordsFound++;
@@ -1281,6 +1360,7 @@ function finalizeSelection(){
     checkAchievements();
     state.coins += 1; game.sessionCoins += 1;
     updateExtraWords();
+    updateWordsFound();
     toast(word+' · bonus +1', 'bonus');
     soundBonus(); vibrate(8);
     saveLevelProgress();
@@ -1334,6 +1414,8 @@ function handleDailyComplete(){
   state.lastDailyCompleted = true;
   state.dailyBestStreak = Math.max(state.dailyBestStreak, state.dailyStreak);
   state.totalDailyCompleted++;
+  if (!state.dailyCompletedDates) state.dailyCompletedDates = [];
+  if (!state.dailyCompletedDates.includes(ds)) state.dailyCompletedDates.push(ds);
 }
 
 function showCompleteModal(){
@@ -1518,6 +1600,8 @@ function renderStats(){
   const worldsDone = WORLD_LIST.filter(w => worldCompletedCount(w) === w.levels.length).length;
   qs('#s-worlds').textContent = worldsDone + ' / ' + WORLD_LIST.length;
   qs('#s-daily-best').textContent = state.dailyBestStreak;
+  calYear = 0; calMonth = 0;
+  renderCalendar();
   renderAchievements();
 }
 
@@ -1525,6 +1609,7 @@ function renderStats(){
 function renderSettings(){
   applyTheme();
   qs('#toggle-sound').classList.toggle('on', state.settings.sound);
+  qs('#toggle-glyph').classList.toggle('on', state.settings.glyphSounds);
   qs('#toggle-haptics').classList.toggle('on', state.settings.haptics);
   qs('#dict-count').textContent = TOTAL_DICT_WORDS.toLocaleString();
   qs('#level-count-credit').textContent = TOTAL_LEVELS;
@@ -1634,6 +1719,73 @@ function showDef(word, text){
   qs('#modal-def').classList.add('show');
 }
 
+/* ================= Word list in-game (definitions) ================= */
+function updateWordsFound(){
+  const wrap = qs('#found-words');
+  if (!wrap) return;
+  const required = Array.from(game.solvedWords).sort();
+  const bonus = Array.from(game.foundBonus).sort();
+  const all = new Set([...required, ...bonus]);
+  wrap.innerHTML = '';
+  Array.from(all).sort().forEach(w => {
+    const span = document.createElement('span');
+    span.textContent = w;
+    if (required.includes(w)) span.classList.add('required');
+    span.addEventListener('click', () => fetchDefinition(w));
+    wrap.appendChild(span);
+  });
+}
+
+/* ================= Calendar ================= */
+let calYear = 0, calMonth = 0;
+function renderCalendar(){
+  const wrap = qs('#cal-wrap');
+  if (!wrap) return;
+  const dates = state.dailyCompletedDates || [];
+  const now = new Date();
+  if (!calYear) { calYear = now.getFullYear(); calMonth = now.getMonth(); }
+  const first = new Date(calYear, calMonth, 1);
+  const last = new Date(calYear, calMonth + 1, 0);
+  const startDay = first.getDay();
+  const todayStrVal = todayStr(now);
+  wrap.innerHTML = '<div class="cal-month"><button class="cal-prev">←</button><span>'+first.toLocaleString('en',{month:'long',year:'numeric'})+'</span><button class="cal-next">→</button></div>';
+  const hd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => '<div class="cal-hd">'+d+'</div>').join('');
+  let grid = '<div class="cal-grid">'+hd;
+  for (let i=0;i<startDay;i++) grid += '<div></div>';
+  for (let d=1;d<=last.getDate();d++){
+    const ds = calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const isToday = ds === todayStrVal;
+    const isDone = dates.includes(ds);
+    grid += '<div class="cal-day'+(isToday?' today':'')+(isDone?' done':'')+'">'+d+'</div>';
+  }
+  grid += '</div>';
+  wrap.innerHTML += grid;
+  qs('.cal-prev').addEventListener('click', () => { calMonth--; if (calMonth<0){calMonth=11;calYear--;} renderCalendar(); });
+  qs('.cal-next').addEventListener('click', () => { calMonth++; if (calMonth>11){calMonth=0;calYear++;} renderCalendar(); });
+}
+
+/* ================= Save export / import ================= */
+function exportSave(){
+  try{
+    const json = JSON.stringify(state);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    navigator.clipboard.writeText(b64).then(() => toast('Save code copied!')).catch(() => { prompt('Copy this code:', b64); });
+  }catch(e){ toast('Export failed'); }
+}
+function importSave(code){
+  try{
+    const json = decodeURIComponent(escape(atob(code.trim())));
+    const parsed = JSON.parse(json);
+    state = Object.assign(defaultSave(), parsed, {
+      settings: Object.assign(defaultSave().settings, parsed.settings||{})
+    });
+    persist();
+    qs('#modal-import').classList.remove('show');
+    showScreen('home',{noStack:true}); renderHome(); applyTheme();
+    toast('Save imported!');
+  }catch(e){ toast('Invalid code'); }
+}
+
 /* ================= Wiring ================= */
 function wireEvents(){
   qsa('.tab').forEach(tab => tab.addEventListener('click', () => {
@@ -1706,6 +1858,13 @@ function wireEvents(){
     qs('#modal-reset').classList.remove('show');
     showScreen('home',{noStack:true}); renderHome(); applyTheme();
   });
+  qs('#toggle-glyph').addEventListener('click', () => {
+    state.settings.glyphSounds = !state.settings.glyphSounds; persist(); renderSettings();
+  });
+  qs('#row-export').addEventListener('click', exportSave);
+  qs('#row-import').addEventListener('click', () => { qs('#modal-import').classList.add('show'); qs('#import-text').value = ''; });
+  qs('#import-cancel').addEventListener('click', () => qs('#modal-import').classList.remove('show'));
+  qs('#import-confirm').addEventListener('click', () => importSave(qs('#import-text').value));
 
   window.addEventListener('resize', () => { if (currentScreen==='game' && game) renderBoard(); });
   if (window.matchMedia){
