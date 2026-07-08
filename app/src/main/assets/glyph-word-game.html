@@ -53,6 +53,17 @@
   --red: #ff3232;
 }
 
+[data-theme="amber"]{
+  --bg: #0d0900;
+  --surface: #0d0900;
+  --ink: #ffb347;
+  --ink-dim: #b87a1e;
+  --ink-faint: #5a3d0a;
+  --line: rgba(255,179,71,0.15);
+  --line-strong: rgba(255,179,71,0.35);
+  --red: #ff8c00;
+}
+
 *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; }
 html,body{ height:100%; }
 body{
@@ -311,8 +322,30 @@ button, input { font-family: inherit; }
 }
 .extra-words span{
   font-family:'DotGothic16',monospace; font-size:11px; border:1px solid var(--line);
-  padding:3px 7px; color:var(--ink-dim);
+  padding:3px 7px; color:var(--ink-dim); cursor:pointer;
 }
+.extra-words span:hover{ border-color:var(--red); color:var(--red); }
+
+/* ---------- Achievements ---------- */
+.ach-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 18px 18px; }
+.ach-item{
+  border:1px solid var(--line); padding:12px; text-align:center; transition:border-color .2s;
+  font-family:'DotGothic16',monospace;
+}
+.ach-item.locked{ opacity:.35; }
+.ach-item.unlocked{ border-color:var(--red); }
+.ach-item .ach-icon{ font-size:22px; display:block; margin-bottom:4px; }
+.ach-item .ach-name{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim); }
+.ach-item .ach-desc{ font-size:9px; color:var(--ink-faint); margin-top:2px; }
+.ach-item.unlocked .ach-name{ color:var(--red); }
+
+/* ---------- Challenge input ---------- */
+.challenge-input{
+  width:100%; padding:12px 14px; font-size:16px; text-align:center;
+  background:var(--surface); color:var(--ink); border:1px solid var(--line-strong);
+  outline:none; font-family:'DotGothic16',monospace;
+}
+.challenge-input:focus{ border-color:var(--red); }
 
 /* ---------- Modal ---------- */
 .modal-overlay{
@@ -426,6 +459,7 @@ button, input { font-family: inherit; }
         <button class="btn" id="btn-worlds">Worlds<span class="chev">→</span></button>
         <button class="btn" id="btn-daily">Daily puzzle<span class="chev">→</span></button>
         <button class="btn" id="btn-endless">Endless mode<span class="chev">→</span></button>
+        <button class="btn" id="btn-challenge">Challenge a friend<span class="chev">→</span></button>
       </div>
     </div>
   </section>
@@ -512,6 +546,8 @@ button, input { font-family: inherit; }
       <div class="settings-row"><div><div class="t">Longest word found</div></div><div class="t" id="s-longest">—</div></div>
       <div class="settings-row"><div><div class="t">Worlds completed</div></div><div class="t" id="s-worlds">0 / 25</div></div>
       <div class="settings-row"><div><div class="t">Daily best streak</div></div><div class="t" id="s-daily-best">0</div></div>
+      <div class="credit-block" style="margin-top:16px;"><p><b>Achievements</b></p></div>
+      <div class="ach-grid" id="ach-grid"></div>
     </div>
   </section>
 
@@ -529,6 +565,7 @@ button, input { font-family: inherit; }
         <div class="seg" id="theme-seg">
           <button data-v="light">Light</button>
           <button data-v="dark">Dark</button>
+          <button data-v="amber">Amber</button>
           <button data-v="system">Auto</button>
         </div>
       </div>
@@ -595,6 +632,32 @@ button, input { font-family: inherit; }
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="endless-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CHALLENGE MODAL ============ -->
+  <div class="modal-overlay" id="modal-challenge">
+    <div class="modal">
+      <h2>Challenge a friend</h2>
+      <div class="sub">Enter a name to generate a unique puzzle</div>
+      <input class="challenge-input" id="challenge-name" placeholder="Friend's name..." maxlength="30" autocomplete="off">
+      <div style="display:flex;flex-direction:column;gap:8px;margin:12px 0 16px;">
+        <button class="btn btn-primary" id="challenge-go">Generate<span class="chev">→</span></button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="challenge-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DEFINITION POPOVER ============ -->
+  <div class="modal-overlay" id="modal-def">
+    <div class="modal" style="max-width:360px;">
+      <h2 id="def-word" style="font-size:20px;"></h2>
+      <div class="sub" id="def-text" style="white-space:pre-wrap;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="def-close">Close</button>
       </div>
     </div>
   </div>
@@ -697,6 +760,13 @@ function defaultSave(){
     endlessCursor: 0,
     endlessDifficulty: 'medium',
     seenSwipeTip: false,
+    achievements: [], // unlocked achievement ids
+    totalLevelsCompleted: 0,
+    totalPerfectLevels: 0,
+    totalHintsAvoided: 0,
+    totalShuffles: 0,
+    totalChallenges: 0,
+    totalDailyCompleted: 0,
   };
 }
 let state = null;
@@ -722,7 +792,7 @@ function applyTheme(){
   }
   document.documentElement.setAttribute('data-theme', mode);
   const icon = qs('#theme-icon');
-  if (icon) icon.textContent = mode === 'dark' ? '☾' : '⊙';
+  if (icon) icon.textContent = mode === 'dark' ? '☾' : mode === 'amber' ? '⟡' : '⊙';
   qsa('#theme-seg button').forEach(b => b.classList.toggle('active', b.dataset.v === state.settings.theme));
 }
 
@@ -1120,6 +1190,7 @@ function updateExtraWords(){
   arr.forEach(w => {
     const span = document.createElement('span');
     span.textContent = w;
+    span.addEventListener('click', () => fetchDefinition(w));
     wrap.appendChild(span);
   });
   qs('#extra-count').textContent = arr.length;
@@ -1171,6 +1242,7 @@ function saveLevelProgress(){
 function trackWordFound(word){
   state.totalWordsFound++;
   if (word.length > state.longestWord.length) state.longestWord = word;
+  checkAchievements();
 }
 
 function finalizeSelection(){
@@ -1193,6 +1265,7 @@ function finalizeSelection(){
     game.sessionWordsFound++;
     trackWordFound(word);
     state.totalBonusFound++;
+    checkAchievements();
     state.coins += 1; game.sessionCoins += 1;
     updateExtraWords();
     toast(word+' · bonus +1', 'bonus');
@@ -1221,6 +1294,11 @@ function checkLevelComplete(){
     solvedWords: Array.from(game.solvedWords), foundBonus: Array.from(game.foundBonus), hintedCells: Array.from(game.hintedCells), hintsUsed: game.hintsUsed,
   });
   if (!wasAlreadyComplete) state.coins += 8, game.sessionCoins += 8;
+  if (!wasAlreadyComplete) state.totalLevelsCompleted++;
+  if (!wasAlreadyComplete && game.hintsUsed === 0) state.totalHintsAvoided++;
+  if (!wasAlreadyComplete && stars === 3) state.totalPerfectLevels++;
+  if (!wasAlreadyComplete && game.mode === 'challenge') state.totalChallenges++;
+  checkAchievements();
 
   if (game.mode === 'daily'){
     handleDailyComplete();
@@ -1242,6 +1320,7 @@ function handleDailyComplete(){
   state.lastDailyDate = ds;
   state.lastDailyCompleted = true;
   state.dailyBestStreak = Math.max(state.dailyBestStreak, state.dailyStreak);
+  state.totalDailyCompleted++;
 }
 
 function showCompleteModal(){
@@ -1320,6 +1399,8 @@ function shuffleWheel(){
   game.letterOrder = arr;
   renderWheel();
   vibrate(6);
+  state.totalShuffles++;
+  checkAchievements();
 }
 
 /* ---------- pointer / wheel input ---------- */
@@ -1424,6 +1505,7 @@ function renderStats(){
   const worldsDone = WORLD_LIST.filter(w => worldCompletedCount(w) === w.levels.length).length;
   qs('#s-worlds').textContent = worldsDone + ' / ' + WORLD_LIST.length;
   qs('#s-daily-best').textContent = state.dailyBestStreak;
+  renderAchievements();
 }
 
 /* ================= Settings ================= */
@@ -1433,6 +1515,110 @@ function renderSettings(){
   qs('#toggle-haptics').classList.toggle('on', state.settings.haptics);
   qs('#dict-count').textContent = TOTAL_DICT_WORDS.toLocaleString();
   qs('#level-count-credit').textContent = TOTAL_LEVELS;
+}
+
+/* ================= Achievements ================= */
+const ACHIEVEMENTS = [
+  {id:'first_word', icon:'✦', name:'First Word', desc:'Find your first word'},
+  {id:'ten_words', icon:'✦', name:'Word Collector', desc:'Find 10 words'},
+  {id:'fifty_words', icon:'✦', name:'Well Read', desc:'Find 50 words'},
+  {id:'hundred_words', icon:'✦', name:'Centurion', desc:'Find 100 words'},
+  {id:'first_solve', icon:'★', name:'First Solve', desc:'Complete your first puzzle'},
+  {id:'ten_solves', icon:'★', name:'Puzzler', desc:'Complete 10 puzzles'},
+  {id:'five_perfect', icon:'★', name:'Flawless', desc:'Complete 5 puzzles with 3 stars'},
+  {id:'ten_perfect', icon:'★', name:'Perfectionist', desc:'Complete 10 puzzles with 3 stars'},
+  {id:'first_bonus', icon:'◆', name:'Extra Credit', desc:'Find a bonus word'},
+  {id:'hintless', icon:'◎', name:'Pure', desc:'Complete a puzzle without hints'},
+  {id:'ten_hintless', icon:'◎', name:'Enlightened', desc:'Complete 10 puzzles without hints'},
+  {id:'streak_3', icon:'⟡', name:'On a Roll', desc:'Reach a 3-day streak'},
+  {id:'streak_7', icon:'⟡', name:'Weekly Warrior', desc:'Reach a 7-day streak'},
+  {id:'daily_5', icon:'⟡', name:'Regular', desc:'Complete 5 daily challenges'},
+  {id:'endless_5', icon:'∞', name:'Endless Explorer', desc:'Complete 5 endless levels'},
+  {id:'endless_20', icon:'∞', name:'Infinite', desc:'Complete 20 endless levels'},
+  {id:'shuffle_50', icon:'↻', name:'Shuffler', desc:'Shuffle 50 times'},
+  {id:'all_worlds', icon:'◈', name:'World Traveler', desc:'Complete all 25 worlds'},
+  {id:'challenge_1', icon:'♠', name:'Challenge Accepted', desc:'Complete a friend challenge'},
+];
+
+function checkAchievements(){
+  const unlocked = new Set(state.achievements);
+  let changed = false;
+  function unlock(id){
+    if (unlocked.has(id)) return;
+    unlocked.add(id); changed = true;
+    state.achievements.push(id);
+    toast('Achievement: '+ (ACHIEVEMENTS.find(a=>a.id===id)||{}).name);
+  }
+  const tw = state.totalWordsFound;
+  if (tw >= 1) unlock('first_word');
+  if (tw >= 10) unlock('ten_words');
+  if (tw >= 50) unlock('fifty_words');
+  if (tw >= 100) unlock('hundred_words');
+  if (state.totalLevelsCompleted >= 1) unlock('first_solve');
+  if (state.totalLevelsCompleted >= 10) unlock('ten_solves');
+  if (state.totalPerfectLevels >= 5) unlock('five_perfect');
+  if (state.totalPerfectLevels >= 10) unlock('ten_perfect');
+  if (state.totalBonusFound >= 1) unlock('first_bonus');
+  if (state.totalHintsAvoided >= 1) unlock('hintless');
+  if (state.totalHintsAvoided >= 10) unlock('ten_hintless');
+  if (state.dailyStreak >= 3) unlock('streak_3');
+  if (state.dailyStreak >= 7) unlock('streak_7');
+  if (state.totalDailyCompleted >= 5) unlock('daily_5');
+  const endlessCount = Object.values(state.levelProgress).filter(p => p.id && String(p.id).startsWith('proc_')).length;
+  if (endlessCount >= 5) unlock('endless_5');
+  if (endlessCount >= 20) unlock('endless_20');
+  if (state.totalShuffles >= 50) unlock('shuffle_50');
+  if (state.totalLevelsCompleted >= 370) unlock('all_worlds');
+  if (state.totalChallenges >= 1) unlock('challenge_1');
+  if (changed) persist();
+  return changed;
+}
+
+function renderAchievements(){
+  const grid = qs('#ach-grid');
+  if (!grid) return;
+  const unlocked = new Set(state.achievements);
+  grid.innerHTML = ACHIEVEMENTS.map(a => {
+    const ok = unlocked.has(a.id);
+    return `<div class="ach-item ${ok?'unlocked':'locked'}"><span class="ach-icon">${a.icon}</span><div class="ach-name">${a.name}</div><div class="ach-desc">${ok?a.desc:'???'}</div></div>`;
+  }).join('');
+}
+
+/* ================= Challenge ================= */
+function generateChallengeLevel(name){
+  const h = Math.abs(hashStr(name.toLowerCase().trim()));
+  const pool = Array.from(DICT_SET).filter(w => w.length >= 5 && w.length <= 8);
+  const anchor = pool[h % pool.length];
+  return generateProceduralLevel(anchor, 'medium');
+}
+
+/* ================= Definitions ================= */
+const defCache = {};
+function fetchDefinition(word){
+  if (defCache[word]){ showDef(word, defCache[word]); return; }
+  if (defCache[word] === null){ toast('No definition found'); return; }
+  const w = word.toLowerCase().trim();
+  fetch('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(w))
+    .then(r => { if (!r.ok) throw Error(); return r.json(); })
+    .then(data => {
+      if (data && data[0] && data[0].meanings){
+        const lines = [];
+        data[0].meanings.slice(0,3).forEach(m => {
+          const defs = m.definitions.slice(0,2);
+          defs.forEach(d => lines.push('('+m.partOfSpeech+') '+d.definition));
+        });
+        defCache[word] = lines.join('\n') || 'No definition found';
+      } else {
+        throw Error();
+      }
+      showDef(word, defCache[word]);
+    })
+    .catch(() => { defCache[word] = null; toast('No definition found'); });
+}
+function showDef(word, text){
+  qs('#def-word').textContent = word.toLowerCase();
+  qs('#def-text').textContent = text;
+  qs('#modal-def').classList.add('show');
 }
 
 /* ================= Wiring ================= */
@@ -1461,6 +1647,20 @@ function wireEvents(){
     startLevel(nextEndlessLevel(diff), {mode:'endless', difficulty: diff});
   }));
   qs('#btn-daily').addEventListener('click', () => startLevel(dailyLevelForToday(), {mode:'daily'}));
+  qs('#btn-challenge').addEventListener('click', () => qs('#modal-challenge').classList.add('show'));
+  qs('#challenge-cancel').addEventListener('click', () => qs('#modal-challenge').classList.remove('show'));
+  qs('#challenge-go').addEventListener('click', () => {
+    const name = qs('#challenge-name').value.trim();
+    if (!name){ toast('Enter a name'); return; }
+    qs('#modal-challenge').classList.remove('show');
+    qs('#challenge-name').value = '';
+    const lv = generateChallengeLevel(name);
+    if (lv) startLevel(lv, {mode:'challenge'});
+    else toast('Could not generate puzzle');
+  });
+  qs('#challenge-name').addEventListener('keydown', e => { if (e.key==='Enter') qs('#challenge-go').click(); });
+
+  qs('#def-close').addEventListener('click', () => qs('#modal-def').classList.remove('show'));
 
   qs('#game-back').addEventListener('click', () => { showScreen('home',{noStack:true}); renderHome(); });
   qs('#btn-shuffle').addEventListener('click', shuffleWheel);
@@ -1472,9 +1672,9 @@ function wireEvents(){
   qs('#modal-worlds-btn').addEventListener('click', () => { hideCompleteModal(); showScreen('worlds',{noStack:true}); renderWorlds(); });
 
   qs('#theme-toggle').addEventListener('click', () => {
-    const order = ['system','light','dark'];
+    const order = ['system','light','dark','amber'];
     const cur = order.indexOf(state.settings.theme);
-    state.settings.theme = order[(cur+1)%3];
+    state.settings.theme = order[(cur+1)%4];
     persist(); applyTheme();
   });
   qsa('#theme-seg button').forEach(b => b.addEventListener('click', () => {
