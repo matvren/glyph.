@@ -1789,12 +1789,13 @@ function renderCalendar(){
 /* ================= Save export / import ================= */
 function exportSave(){
   try{
-    navigator.clipboard.writeText(JSON.stringify(state)).then(() => toast('Copied to clipboard!')).catch(() => { prompt('Copy this:', JSON.stringify(state)); });
-  }catch(e){ prompt('Copy this:', JSON.stringify(state)); }
+    const encoded = btoa(JSON.stringify(state));
+    navigator.clipboard.writeText(encoded).then(() => toast('Copied to clipboard!')).catch(() => { prompt('Copy this:', encoded); });
+  }catch(e){ prompt('Copy this:', btoa(JSON.stringify(state))); }
 }
 function importSave(code){
   try{
-    const parsed = JSON.parse(code);
+    const parsed = JSON.parse(atob(code.trim()));
     state = Object.assign(defaultSave(), parsed, {
       settings: Object.assign(defaultSave().settings, parsed.settings||{})
     });
